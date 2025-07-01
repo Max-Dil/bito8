@@ -20,6 +20,7 @@ end
 
 DRAW.__setResolution = function (width, height)
     DRAW.width, DRAW.height = width, height
+    DRAW.PIXELS = {}
     for y = 1, DRAW.height, 1 do
         DRAW.PIXELS[y] = {}
         for x = 1, DRAW.width, 1 do
@@ -35,7 +36,7 @@ DRAW.drawPixel = function(x, y, color)
        y >= 1 and y <= DRAW.height then
         DRAW.PIXELS[y][x] = color
     else
-        print(string.format("Invalid pixel coordinates (%d, %d)", x, y))
+        -- print(string.format("Invalid pixel coordinates (%d, %d)", x, y))
     end
 end
 

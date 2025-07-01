@@ -1,32 +1,83 @@
 local graphics = {}
 local math_floor = math.floor
 
-graphics.drawPixel = function(x, y, color)
-    x, y = math_floor(x), math_floor(y)
-    graphics.DRAW.drawPixel(x, y, color)
+graphics.drawState = {
+    color = {255, 255, 255},
+    scale = 1,
+    angle = 0,
+    stack = {},
+}
+
+graphics.push = function()
+    table.insert(graphics.drawState.stack, {
+        color = {graphics.drawState.color[1], graphics.drawState.color[2], graphics.drawState.color[3]},
+        scale = graphics.drawState.scale,
+        angle = graphics.drawState.angle,
+    })
 end
 
-graphics.drawLine = function(x1, y1, x2, y2, color)
+graphics.pop = function()
+    local state = table.remove(graphics.drawState.stack)
+    if state then
+        graphics.drawState.color = state.color
+        graphics.drawState.scale = state.scale
+        graphics.drawState.angle = state.angle
+    else
+        print("Warning: Attempted to pop from an empty drawing state stack.")
+    end
+end
+
+graphics.setColor = function(r, g, b)
+    graphics.drawState.color = {r, g, b}
+end
+
+graphics.scale = function(scale_factor)
+    graphics.drawState.scale = scale_factor
+end
+
+graphics.rotate = function(angle)
+    graphics.drawState.angle = angle
+end
+
+graphics.pixel = function(x, y)
+    x, y = math_floor(x), math_floor(y)
+    graphics.DRAW.drawPixel(x, y, graphics.drawState.color)
+end
+
+graphics.line = function(x1, y1, x2, y2)
     x1, y1 = math_floor(x1), math_floor(y1)
     x2, y2 = math_floor(x2), math_floor(y2)
-    color = color or {255, 255, 255}
-
+    
     local dx = math.abs(x2 - x1)
     local dy = math.abs(y2 - y1)
     local sx = x1 < x2 and 1 or -1
     local sy = y1 < y2 and 1 or -1
     local err = dx - dy
+    
+    local rotation_angle = graphics.drawState.angle
+    local cos_angle = math.cos(rotation_angle)
+    local sin_angle = math.sin(rotation_angle)
+    
+    local center_x, center_y = (x1 + x2) / 2, (y1 + y2) / 2
 
     while true do
-        if x1 >= 1 and x1 <= graphics.DRAW.width and
-            y1 >= 1 and y1 <= graphics.DRAW.height then
-            graphics.DRAW.drawPixel(x1, y1, color)
+        local translated_x = x1 - center_x
+        local translated_y = y1 - center_y
+        local rotated_x = translated_x * cos_angle - translated_y * sin_angle
+        local rotated_y = translated_x * sin_angle + translated_y * cos_angle
+        
+        local final_x = math_floor(rotated_x + center_x)
+        local final_y = math_floor(rotated_y + center_y)
+
+        if final_x >= 1 and final_x <= graphics.DRAW.width and
+           final_y >= 1 and final_y <= graphics.DRAW.height then
+            graphics.DRAW.drawPixel(final_x, final_y, graphics.drawState.color)
         end
 
         if x1 == x2 and y1 == y2 then break end
     
-            local e2 = 2 * err
-            if e2 > -dy then
+        local e2 = 2 * err
+        if e2 > -dy then
             err = err - dy
             x1 = x1 + sx
         end
@@ -46,124 +97,174 @@ graphics.clear = function (r, g, b)
     end
 end
 
-graphics.drawCircle = function(x, y, radius, color, filled)
+graphics.circle = function(x, y, radius, filled)
     x, y = math_floor(x), math_floor(y)
-    radius = math_floor(radius)
-    color = color or {255, 255, 255}
+    radius = math_floor(radius) * graphics.drawState.scale
     filled = filled or false
 
-    local function plotPoints(cx, cy, x, y)
+    local function plotPoints(cx, cy, x_offset, y_offset)
         if filled then
-            graphics.drawLine(cx - x, cy + y, cx + x, cy + y, color)
-            graphics.drawLine(cx - x, cy - y, cx + x, cy - y, color)
-            graphics.drawLine(cx - y, cy + x, cx + y, cy + x, color)
-            graphics.drawLine(cx - y, cy - x, cx + y, cy - x, color)
+            graphics.line(cx - x_offset, cy + y_offset, cx + x_offset, cy + y_offset)
+            graphics.line(cx - x_offset, cy - y_offset, cx + x_offset, cy - y_offset)
+            graphics.line(cx - y_offset, cy + x_offset, cx + y_offset, cy + x_offset)
+            graphics.line(cx - y_offset, cy - x_offset, cx + y_offset, cy - x_offset)
         else
-            graphics.drawPixel(cx + x, cy + y, color)
-            graphics.drawPixel(cx - x, cy + y, color)
-            graphics.drawPixel(cx + x, cy - y, color)
-            graphics.drawPixel(cx - x, cy - y, color)
-            graphics.drawPixel(cx + y, cy + x, color)
-            graphics.drawPixel(cx - y, cy + x, color)
-            graphics.drawPixel(cx + y, cy - x, color)
-            graphics.drawPixel(cx - y, cy - x, color)
+            graphics.drawPixel(cx + x_offset, cy + y_offset)
+            graphics.drawPixel(cx - x_offset, cy + y_offset)
+            graphics.drawPixel(cx + x_offset, cy - y_offset)
+            graphics.drawPixel(cx - x_offset, cy - y_offset)
+            graphics.drawPixel(cx + y_offset, cy + x_offset)
+            graphics.drawPixel(cx - y_offset, cy + x_offset)
+            graphics.drawPixel(cx + y_offset, cy - x_offset)
+            graphics.drawPixel(cx - y_offset, cy - x_offset)
         end
     end
 
-    local x1 = 0
-    local y1 = radius
+    local x_offset = 0
+    local y_offset = radius
     local d = 3 - 2 * radius
 
-    plotPoints(x, y, x1, y1)
-    while y1 >= x1 do
-        x1 = x1 + 1
+    plotPoints(x, y, x_offset, y_offset)
+    while y_offset >= x_offset do
+        x_offset = x_offset + 1
         if d > 0 then
-            y1 = y1 - 1
-            d = d + 4 * (x1 - y1) + 10
+            y_offset = y_offset - 1
+            d = d + 4 * (x_offset - y_offset) + 10
         else
-            d = d + 4 * x1 + 6
+            d = d + 4 * x_offset + 6
         end
-        plotPoints(x, y, x1, y1)
+        plotPoints(x, y, x_offset, y_offset)
     end
 end
 
-graphics.drawImage = function(x, y, data, scale)
+graphics.image = function(x, y, data)
     x, y = math_floor(x), math_floor(y)
-    scale = scale or 1
-    
-    if scale == 1 then
-        for image_x = 1, #data, 1 do
-            for image_y = 1, #data[image_x], 1 do
-                graphics.DRAW.drawPixel(x + image_x-1, y + image_y-1, data[image_x][image_y])
-            end
-        end
-    else
-        local scaled_width = #data * scale
-        local scaled_height = #data[1] * scale
-        
-        for dx = 0, scaled_width - 1 do
-            for dy = 0, scaled_height - 1 do
-                local src_x = math.floor(dx / scale) + 1
-                local src_y = math.floor(dy / scale) + 1
+    local scale = graphics.drawState.scale
+
+    local rotated_data = {}
+    local scaled_width = #data * scale
+    local scaled_height = #data[1] * scale
+
+    for dx = 0, scaled_width - 1 do
+        for dy = 0, scaled_height - 1 do
+            local src_x = math.floor(dx / scale) + 1
+            local src_y = math.floor(dy / scale) + 1
+
+            if src_x >= 1 and src_x <= #data and
+               src_y >= 1 and src_y <= #data[1] then
+
+                local px = x + dx
+                local py = y + dy
+
+                local center_x = x + scaled_width / 2
+                local center_y = y + scaled_height / 2
+                local translated_x = px - center_x
+                local translated_y = py - center_y
+                local cos_angle = math.cos(graphics.drawState.angle)
+                local sin_angle = math.sin(graphics.drawState.angle)
+                local rotated_x = translated_x * cos_angle - translated_y * sin_angle
+                local rotated_y = translated_x * sin_angle + translated_y * cos_angle
                 
-                if src_x >= 1 and src_x <= #data and
-                   src_y >= 1 and src_y <= #data[1] then
-                    local px = math.floor(x + dx)
-                    local py = math.floor(y + dy)
-                    
-                    if px >= 1 and px <= graphics.DRAW.width and
-                       py >= 1 and py <= graphics.DRAW.height then
-                        graphics.DRAW.drawPixel(px, py, data[src_x][src_y])
-                    end
+                local final_x = math_floor(rotated_x + center_x)
+                local final_y = math_floor(rotated_y + center_y)
+
+                if final_x >= 1 and final_x <= graphics.DRAW.width and
+                   final_y >= 1 and final_y <= graphics.DRAW.height then
+                    graphics.DRAW.drawPixel(final_x, final_y, data[src_x][src_y])
                 end
             end
         end
     end
 end
 
-graphics.drawRectangle = function(x, y, width, height, color, isFilled)
+graphics.rectangle = function(x, y, width, height, isFilled)
     x, y = math_floor(x), math_floor(y)
-    width, height = math_floor(width), math_floor(height)
+    width, height = math_floor(width * graphics.drawState.scale), math_floor(height * graphics.drawState.scale)
     isFilled = isFilled == nil and true or isFilled
     
-    if not isFilled then
+    if isFilled then
         for dy = 0, height - 1 do
             for dx = 0, width - 1 do
-                local px = math.floor(x + dx)
-                local py = math.floor(y + dy)
+                local px = x + dx
+                local py = y + dy
+                local center_x = x + width / 2
+                local center_y = y + height / 2
+                local translated_x = px - center_x
+                local translated_y = py - center_y
+                local cos_angle = math.cos(graphics.drawState.angle)
+                local sin_angle = math.sin(graphics.drawState.angle)
+                local rotated_x = translated_x * cos_angle - translated_y * sin_angle
+                local rotated_y = translated_x * sin_angle + translated_y * cos_angle
+                
+                local final_x = math_floor(rotated_x + center_x)
+                local final_y = math_floor(rotated_y + center_y)
 
-                if px >= 1 and px <= graphics.DRAW.width and
-                   py >= 1 and py <= graphics.DRAW.height then
-                    graphics.DRAW.drawPixel(px, py, color)
+                if final_x >= 1 and final_x <= graphics.DRAW.width and
+                   final_y >= 1 and final_y <= graphics.DRAW.height then
+                    graphics.DRAW.drawPixel(final_x, final_y, graphics.drawState.color)
                 end
             end
         end
     else
         for dx = 0, width - 1 do
-            local px = math.floor(x + dx)
-            local py_top = math.floor(y)
-            if px >= 1 and px <= graphics.DRAW.width and
-               py_top >= 1 and py_top <= graphics.DRAW.height then
-                graphics.DRAW.drawPixel(px, py_top, color)
+            local px = x + dx
+            local py_top = y
+            local py_bottom = y + height - 1
+
+            local center_x = x + width / 2
+            local center_y = y + height / 2
+
+            local translated_x_top = px - center_x
+            local translated_y_top = py_top - center_y
+            local rotated_x_top = translated_x_top * math.cos(graphics.drawState.angle) - translated_y_top * math.sin(graphics.drawState.angle)
+            local rotated_y_top = translated_x_top * math.sin(graphics.drawState.angle) + translated_y_top * math.cos(graphics.drawState.angle)
+            local final_x_top = math_floor(rotated_x_top + center_x)
+            local final_y_top = math_floor(rotated_y_top + center_y)
+            if final_x_top >= 1 and final_x_top <= graphics.DRAW.width and
+               final_y_top >= 1 and final_y_top <= graphics.DRAW.height then
+                graphics.DRAW.drawPixel(final_x_top, final_y_top, graphics.drawState.color)
             end
-            local py_bottom = math.floor(y + height - 1)
-            if px >= 1 and px <= graphics.DRAW.width and
-               py_bottom >= 1 and py_bottom <= graphics.DRAW.height then
-                graphics.DRAW.drawPixel(px, py_bottom, color)
+
+            local translated_x_bottom = px - center_x
+            local translated_y_bottom = py_bottom - center_y
+            local rotated_x_bottom = translated_x_bottom * math.cos(graphics.drawState.angle) - translated_y_bottom * math.sin(graphics.drawState.angle)
+            local rotated_y_bottom = translated_x_bottom * math.sin(graphics.drawState.angle) + translated_y_bottom * math.cos(graphics.drawState.angle)
+            local final_x_bottom = math_floor(rotated_x_bottom + center_x)
+            local final_y_bottom = math_floor(rotated_y_bottom + center_y)
+            if final_x_bottom >= 1 and final_x_bottom <= graphics.DRAW.width and
+               final_y_bottom >= 1 and final_y_bottom <= graphics.DRAW.height then
+                graphics.DRAW.drawPixel(final_x_bottom, final_y_bottom, graphics.drawState.color)
             end
         end
 
         for dy = 1, height - 2 do
-            local px_left = math.floor(x)
-            local py = math.floor(y + dy)
-            if px_left >= 1 and px_left <= graphics.DRAW.width and
-               py >= 1 and py <= graphics.DRAW.height then
-                graphics.DRAW.drawPixel(px_left, py, color)
+            local px_left = x
+            local px_right = x + width - 1
+            local py = y + dy
+
+            local center_x = x + width / 2
+            local center_y = y + height / 2
+
+            local translated_x_left = px_left - center_x
+            local translated_y_left = py - center_y
+            local rotated_x_left = translated_x_left * math.cos(graphics.drawState.angle) - translated_y_left * math.sin(graphics.drawState.angle)
+            local rotated_y_left = translated_x_left * math.sin(graphics.drawState.angle) + translated_y_left * math.cos(graphics.drawState.angle)
+            local final_x_left = math_floor(rotated_x_left + center_x)
+            local final_y_left = math_floor(rotated_y_left + center_y)
+            if final_x_left >= 1 and final_x_left <= graphics.DRAW.width and
+               final_y_left >= 1 and final_y_left <= graphics.DRAW.height then
+                graphics.DRAW.drawPixel(final_x_left, final_y_left, graphics.drawState.color)
             end
-            local px_right = math.floor(x + width - 1)
-            if px_right >= 1 and px_right <= graphics.DRAW.width and
-               py >= 1 and py <= graphics.DRAW.height then
-                graphics.DRAW.drawPixel(px_right, py, color)
+
+            local translated_x_right = px_right - center_x
+            local translated_y_right = py - center_y
+            local rotated_x_right = translated_x_right * math.cos(graphics.drawState.angle) - translated_y_right * math.sin(graphics.drawState.angle)
+            local rotated_y_right = translated_x_right * math.sin(graphics.drawState.angle) + translated_y_right * math.cos(graphics.drawState.angle)
+            local final_x_right = math_floor(rotated_x_right + center_x)
+            local final_y_right = math_floor(rotated_y_right + center_y)
+            if final_x_right >= 1 and final_x_right <= graphics.DRAW.width and
+               final_y_right >= 1 and final_y_right <= graphics.DRAW.height then
+                graphics.DRAW.drawPixel(final_x_right, final_y_right, graphics.drawState.color)
             end
         end
     end
@@ -185,22 +286,35 @@ graphics.fill = function(x, y, color)
     end
 
     local queue = {{x, y}}
+    local visited = {}
+    
+    local function isVisited(px, py)
+        return visited[px] and visited[px][py]
+    end
+    
+    local function setVisited(px, py)
+        visited[px] = visited[px] or {}
+        visited[px][py] = true
+    end
 
     while #queue > 0 do
         local current = table.remove(queue, 1)
         local cx, cy = current[1], current[2]
+        
+        if not isVisited(cx, cy) then
+            local pixel_color = graphics.DRAW.getPixel(cx, cy)
+            if pixel_color[1] == target_color[1] and 
+               pixel_color[2] == target_color[2] and 
+               pixel_color[3] == target_color[3] then
+                
+                graphics.DRAW.drawPixel(cx, cy, color)
+                setVisited(cx, cy)
 
-        local pixel_color = graphics.DRAW.getPixel(cx, cy)
-        if pixel_color[1] == target_color[1] and 
-           pixel_color[2] == target_color[2] and 
-           pixel_color[3] == target_color[3] then
-           
-            graphics.DRAW.drawPixel(cx, cy, color)
-
-            if cx > 1 then table.insert(queue, {cx - 1, cy}) end
-            if cx < graphics.DRAW.width then table.insert(queue, {cx + 1, cy}) end
-            if cy > 1 then table.insert(queue, {cx, cy - 1}) end
-            if cy < graphics.DRAW.height then table.insert(queue, {cx, cy + 1}) end
+                if cx > 1 then table.insert(queue, {cx - 1, cy}) end
+                if cx < graphics.DRAW.width then table.insert(queue, {cx + 1, cy}) end
+                if cy > 1 then table.insert(queue, {cx, cy - 1}) end
+                if cy < graphics.DRAW.height then table.insert(queue, {cx, cy + 1}) end
+            end
         end
     end
 end
@@ -313,7 +427,7 @@ local font = {
     ['←'] = {0x00, 0x04, 0x08, 0x1F, 0x08, 0x04, 0x00},
     ['→'] = {0x00, 0x04, 0x02, 0x1F, 0x02, 0x04, 0x00},
 
-        -- Русские заглавные буквы
+    -- Русские заглавные буквы
     ['А'] = {0x04, 0x0A, 0x11, 0x11, 0x1F, 0x11, 0x11},
     ['Б'] = {0x1F, 0x10, 0x10, 0x1E, 0x11, 0x11, 0x1E},
     ['В'] = {0x1E, 0x11, 0x11, 0x1E, 0x11, 0x11, 0x1E},
@@ -384,10 +498,10 @@ local font = {
 
 local utf8 = require("utf8")
 
-graphics.drawText = function(x, y, text, color, scale)
+graphics.text = function(x, y, text)
     x, y = math_floor(x), math_floor(y)
-    color = color or {255, 255, 255}
-    scale = math_floor(scale or 1)
+    local scale = graphics.drawState.scale
+    local color = graphics.drawState.color
 
     local char_width = 5 * scale
     local char_spacing = 1 * scale
@@ -422,10 +536,23 @@ graphics.drawText = function(x, y, text, color, scale)
                                     for sx = 0, scale - 1 do
                                         local px = current_x + col * scale + sx
                                         local py = current_y + (row - 1) * scale + sy
+                                        
+                                        local center_x = x + (i - 1) * (char_width + char_spacing) + char_width/2
+                                        local center_y = y + (line_num - 1) * line_height + line_height/2
+                                        local translated_x = px - center_x
+                                        local translated_y = py - center_y
+                                        local cos_angle = math.cos(graphics.drawState.angle)
+                                        local sin_angle = math.sin(graphics.drawState.angle)
+                                        local rotated_x = translated_x * cos_angle - translated_y * sin_angle
+                                        local rotated_y = translated_x * sin_angle + translated_y * cos_angle
+                                        
+                                        local final_x = math_floor(rotated_x + center_x)
+                                        local final_y = math_floor(rotated_y + center_y)
 
-                                        if px >= 1 and px <= graphics.DRAW.width and
-                                           py >= 1 and py <= graphics.DRAW.height then
-                                            graphics.DRAW.drawPixel(px, py, color)
+
+                                        if final_x >= 1 and final_x <= graphics.DRAW.width and
+                                           final_y >= 1 and final_y <= graphics.DRAW.height then
+                                            graphics.DRAW.drawPixel(final_x, final_y, color)
                                         end
                                     end
                                 end

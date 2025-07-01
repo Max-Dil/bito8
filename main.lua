@@ -4,15 +4,14 @@ local bito8 = require("bito8")
 local player = {
     x = 100,
     y = 100,
-    image = nil
+    image = nil,
+    angle = 0
 }
 function love.load()
-    -- Load an image
     player.image = bito8.imageConvertor("player.png")
 end
 
 function love.update(dt)
-    -- Game logic goes here
     if love.keyboard.isDown("a") or love.keyboard.isDown("left") then
         player.x = player.x - 60 * dt
     end
@@ -25,27 +24,38 @@ function love.update(dt)
     if love.keyboard.isDown("s") or love.keyboard.isDown("down") then
         player.y = player.y + 60 * dt
     end
+
+    player.angle = player.angle + 2 * dt
 end
 
 function love.draw()
-    -- Clear screen with black
     bito8.graphics.clear(0, 0, 0)
     
-    -- Draw FPS counter
-    bito8.graphics.drawText(10, 10, "FPS: "..love.timer.getFPS(), {255, 255, 255}, 1)
+    bito8.graphics.setColor(255, 255, 255)
+    bito8.graphics.scale(1)
+    bito8.graphics.text(10, 10, "FPS: "..love.timer.getFPS())
     
-    -- Draw player
-    bito8.graphics.drawImage(player.x, player.y, player.image, 2)
+    bito8.graphics.push()
+    bito8.graphics.setColor(255, 255, 0)
+    bito8.graphics.scale(2)
+    bito8.graphics.rotate(player.angle)
+    bito8.graphics.image(player.x, player.y, player.image)
+    bito8.graphics.pop()
     
-    -- Draw a rectangle
-    bito8.graphics.drawRectangle(200, 150, 50, 50, {255, 0, 0})
-    bito8.graphics.fill(210, 160, {0, 255, 0})
-    
-    -- Draw a line
-    bito8.graphics.drawLine(0, 0, 400, 300, {0, 255, 0})
+    bito8.graphics.push()
+    bito8.graphics.setColor(255, 0, 0)
+    bito8.graphics.rectangle(200, 150, 50, 50, false)
+    bito8.graphics.pop()
 
-    bito8.graphics.drawCircle(100, 100, 50, {255, 255, 255}, true)
-    
-    -- Render everything
+    bito8.graphics.fill(210, 160, {0, 255, 0})
+
+    bito8.graphics.setColor(0, 255, 0)
+    bito8.graphics.line(0, 0, 400, 300)
+
+    bito8.graphics.push()
+    bito8.graphics.setColor(255, 255, 255)
+    bito8.graphics.circle(100, 100, 50, true)
+    bito8.graphics.pop()
+
     bito8.draw()
 end
