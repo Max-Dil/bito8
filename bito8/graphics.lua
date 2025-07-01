@@ -179,9 +179,8 @@ end
 graphics.rectangle = function(x, y, width, height, isFilled)
     x, y = math_floor(x), math_floor(y)
     width, height = math_floor(width * graphics.drawState.scale), math_floor(height * graphics.drawState.scale)
-    isFilled = isFilled == nil and true or isFilled
     
-    if isFilled then
+    if not isFilled then
         for dy = 0, height - 1 do
             for dx = 0, width - 1 do
                 local px = x + dx
