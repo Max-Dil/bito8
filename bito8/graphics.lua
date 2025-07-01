@@ -141,7 +141,6 @@ graphics.image = function(x, y, data)
     x, y = math_floor(x), math_floor(y)
     local scale = graphics.drawState.scale
 
-    local rotated_data = {}
     local scaled_width = #data * scale
     local scaled_height = #data[1] * scale
 
