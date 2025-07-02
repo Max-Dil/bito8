@@ -6,6 +6,7 @@ graphics.drawState = {
     scale = 1,
     angle = 0,
     stack = {},
+    translation = {0, 0}
 }
 
 graphics.push = function()
@@ -31,12 +32,17 @@ graphics.setColor = function(r, g, b)
     graphics.drawState.color = {r, g, b}
 end
 
+graphics.translation = function (x, y)
+    graphics.drawState.translation[1] = math_floor(x)
+    graphics.drawState.translation[2] = math_floor(y)
+end
+
 graphics.scale = function(scale_factor)
-    graphics.drawState.scale = scale_factor
+    graphics.drawState.scale = math_floor(scale_factor)
 end
 
 graphics.rotate = function(angle)
-    graphics.drawState.angle = angle
+    graphics.drawState.angle = math_floor(angle)
 end
 
 graphics.pixel = function(x, y)
@@ -45,8 +51,8 @@ graphics.pixel = function(x, y)
 end
 
 graphics.line = function(x1, y1, x2, y2)
-    x1, y1 = math_floor(x1), math_floor(y1)
-    x2, y2 = math_floor(x2), math_floor(y2)
+    x1, y1 = math_floor(x1) + graphics.drawState.translation[1], math_floor(y1) + graphics.drawState.translation[2]
+    x2, y2 = math_floor(x2) + graphics.drawState.translation[1], math_floor(y2) + graphics.drawState.translation[2]
     
     local dx = math.abs(x2 - x1)
     local dy = math.abs(y2 - y1)
@@ -98,7 +104,7 @@ graphics.clear = function (r, g, b)
 end
 
 graphics.circle = function(x, y, radius, filled)
-    x, y = math_floor(x), math_floor(y)
+    x, y = math_floor(x) + graphics.drawState.translation[1], math_floor(y) + graphics.drawState.translation[2]
     radius = math_floor(radius) * graphics.drawState.scale
     filled = filled or false
 
@@ -138,7 +144,7 @@ graphics.circle = function(x, y, radius, filled)
 end
 
 graphics.image = function(x, y, data)
-    x, y = math_floor(x), math_floor(y)
+    x, y = math_floor(x) + graphics.drawState.translation[1], math_floor(y) + graphics.drawState.translation[2]
     local scale = graphics.drawState.scale
 
     local scaled_width = #data * scale
@@ -177,7 +183,7 @@ graphics.image = function(x, y, data)
 end
 
 graphics.rectangle = function(x, y, width, height, isFilled)
-    x, y = math_floor(x), math_floor(y)
+    x, y = math_floor(x) + graphics.drawState.translation[1], math_floor(y) + graphics.drawState.translation[2]
     width, height = math_floor(width * graphics.drawState.scale), math_floor(height * graphics.drawState.scale)
     
     if not isFilled then
@@ -269,7 +275,7 @@ graphics.rectangle = function(x, y, width, height, isFilled)
 end
 
 graphics.fill = function(x, y, color)
-    x, y = math_floor(x), math_floor(y)
+    x, y = math_floor(x) + graphics.drawState.translation[1], math_floor(y) + graphics.drawState.translation[2]
 
     if x < 1 or x > graphics.DRAW.width or y < 1 or y > graphics.DRAW.height then
         return
@@ -495,11 +501,25 @@ local font = {
 }
 
 local utf8 = require("utf8")
+graphics.font = font
+
+graphics.setFont = function(custom_font)
+    if type(custom_font) == "table" then
+        graphics.font = custom_font
+    else
+        print("Warning: setFont expects a font table")
+    end
+end
 
 graphics.text = function(x, y, text)
-    x, y = math_floor(x), math_floor(y)
+    x, y = math_floor(x) + graphics.drawState.translation[1], math_floor(y) + graphics.drawState.translation[2]
     local scale = graphics.drawState.scale
     local color = graphics.drawState.color
+
+    if graphics.drawState.translation then
+        x = x + graphics.drawState.translation[1]
+        y = y + graphics.drawState.translation[2]
+    end
 
     local char_width = 5 * scale
     local char_spacing = 1 * scale
@@ -514,14 +534,13 @@ graphics.text = function(x, y, text)
         local current_y = y + (line_num - 1) * line_height
 
         if current_y + 7*scale <= graphics.DRAW.height then
-
             local chars = {}
             for p, c in utf8.codes(line) do
                 table.insert(chars, utf8.char(c))
             end
 
             for i, char in ipairs(chars) do
-                local glyph = font[char] or font['?']
+                local glyph = graphics.font[char] or graphics.font['?']
                 local current_x = x + (i - 1) * (char_width + char_spacing)
 
                 if current_x + char_width > 0 and current_x <= graphics.DRAW.width then
@@ -546,7 +565,6 @@ graphics.text = function(x, y, text)
                                         
                                         local final_x = math_floor(rotated_x + center_x)
                                         local final_y = math_floor(rotated_y + center_y)
-
 
                                         if final_x >= 1 and final_x <= graphics.DRAW.width and
                                            final_y >= 1 and final_y <= graphics.DRAW.height then
